@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+
+{% block title %}Sales{% endblock %}
+
+{% block content %}
+<div class="card p-4 shadow-sm">
+
+    <!-- Header -->
+    <h5 class="mb-4"><i class="bi bi-receipt"></i> Sale Entry</h5>
+
+    <!-- Sale Form -->
+    <form method="post" id="sale-form">
+        {% csrf_token %}
+
+        <!-- Customer Info -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label">
+                    <i class="bi bi-person"></i> Customer Name
+                </label>
+                <input type="text" name="customer_name" class="form-control" placeholder="Enter customer name" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">
+                    <i class="bi bi-telephone"></i> Contact Number
+                </label>
+                <input type="text" name="contact_number" class="form-control" placeholder="Enter contact number" required>
+            </div>
+        </div>
+
+        <!-- Sale Info -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label">
+                    <i class="bi bi-hash"></i> Sale Number
+                </label>
+                <input type="text"
+       name="sale_number"
+       class="form-control"
+       value="{{ sale_number }}"
+       readonly>
+
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">
+                    <i class="bi bi-calendar"></i> Sale Date
+                </label>
+                <input type="date" name="sale_date" class="form-control" value="{{ today|default:'2025-12-15' }}">
+            </div>
+        </div>
+
+        <!-- Barcode -->
+        <div class="mb-4">
+            <label class="form-label">
+                <i class="bi bi-upc-scan"></i> Scan Barcode
+            </label>
+            <input type="text" id="barcode" class="form-control" placeholder="Scan barcode here">
+        </div>
+
+        <!-- Sale Detail Table -->
+        <h6 class="mb-3"><i class="bi bi-table"></i> Sale Detail</h6>
+        <div class="table-responsive mb-3">
+            <table class="table table-bordered table-sm align-middle text-center" id="sale-table">
+                
+    <thead class="table-light">
+        <tr>
+            <th>Barcode</th> <!-- New column -->
+            <th>Item Code</th>
+            <th>Product Name</th>
+            <th>Company Name</th>
+            <th>Specification</th>
+            <th>Qty</th>
+            <th>Sale Rate</th>
+            <th>Amount</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><input type="text" name="barcode[]" class="form-control form-control-sm barcode" readonly></td> <!-- New input -->
+            <td><input type="text" name="item_code[]" class="form-control form-control-sm item_code"></td>
+            <td><input type="text" name="product_name[]" class="form-control form-control-sm"></td>
+            <td><input type="text" name="company_name[]" class="form-control form-control-sm"></td>
+            <td><input type="text" name="specification[]" class="form-control form-control-sm"></td>
+            <td><input type="number" name="qty[]" class="form-control form-control-sm qty" min="0" value="0"></td>
+            <td><input type="number" name="sale_rate[]" class="form-control form-control-sm sale_rate" min="0" value="0"></td>
+            <td><input type="number" name="amount[]" class="form-control form-control-sm amount" value="0" readonly></td>
+            <td>
+                <button type="button" class="btn btn-danger btn-sm remove-row"><i class="fas fa-trash">X</i></button>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+        </div>
+
+        <!-- Totals -->
+        <div class="row mt-4 g-3">
+    <div class="col-md-3">
+        <label class="form-label">
+            <i class="bi bi-123"></i> Total Qty
+        </label>
+        <input type="text" id="total-qty" name="total_quantity" class="form-control" value="0" readonly>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">
+            PKR Total Amount
+        </label>
+        <input type="text" id="total-amount" name="total_amount" class="form-control" value="0.00" readonly>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">
+            <i class="bi bi-cash"></i> Cash Received
+        </label>
+        <input type="number" id="cash-received" name="cash_received" class="form-control" min="0">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">
+            <i class="bi bi-arrow-return-left"></i> Cash Return
+        </label>
+        <input type="text" id="cash-return" name="cash_return" class="form-control" readonly>
+    </div>
+</div>
+
+
+        <!-- Save Button -->
+        <div class="text-end mt-4">
+            <button type="submit" class="btn btn-success px-4"><i class="bi bi-check-circle"></i> Save</button>
+        </div>
+
+    </form>
+</div>
+
+<!-- JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const barcodeInput = document.getElementById('barcode');
+    const tableBody = document.querySelector('#sale-table tbody');
+
+    // Attach calculation events to a row
+    function attachEvents(row) {
+        const qty = row.querySelector('.qty');
+        const rate = row.querySelector('.sale_rate');
+        const amount = row.querySelector('.amount');
+
+        function calculate() {
+            const q = parseFloat(qty.value) || 0;
+            const r = parseFloat(rate.value) || 0;
+            amount.value = (q * r).toFixed(2);
+            updateTotals();
+        }
+
+        qty.addEventListener('input', calculate);
+        rate.addEventListener('input', calculate);
+
+        row.querySelector('.remove-row').addEventListener('click', function() {
+            row.remove();
+            updateTotals();
+        });
+    }
+
+    // Update totals
+    function updateTotals() {
+        let totalQty = 0, totalAmount = 0;
+        document.querySelectorAll('#sale-table tbody tr').forEach(tr => {
+            totalQty += parseFloat(tr.querySelector('.qty').value) || 0;
+            totalAmount += parseFloat(tr.querySelector('.amount').value) || 0;
+        });
+        document.getElementById('total-qty').value = totalQty;
+        document.getElementById('total-amount').value = totalAmount.toFixed(2);
+
+        const cash = parseFloat(document.getElementById('cash-received').value) || 0;
+        document.getElementById('cash-return').value = (cash - totalAmount).toFixed(2);
+    }
+
+    // Initialize first row
+    attachEvents(tableBody.rows[0]);
+
+// --- Barcode scan auto-fill without debounce ---
+
+
+
+
+barcodeInput.addEventListener('input', function() {
+    const barcode = barcodeInput.value.trim();
+    if (!barcode) return;
+
+    fetch(`/ajax/get-product/?barcode=${barcode}`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.item_code) return;
+
+            let existingRow = Array.from(tableBody.rows).find(r =>
+                r.querySelector('input[name="item_code[]"]').value === data.item_code
+            );
+
+            if (existingRow) {
+                let qtyInput = existingRow.querySelector('input[name="qty[]"]');
+                let currentQty = Number(qtyInput.value) || 0;
+                let availableQty = Number(data.available_qty) || 0;
+
+                if (currentQty + 1 > availableQty) {
+                    alert("Insufficient stock available!");
+                    return;
+                }
+
+                qtyInput.value = currentQty + 1;
+                qtyInput.dispatchEvent(new Event('input'));
+
+            } else {
+                let row = Array.from(tableBody.rows).find(r =>
+                    !r.querySelector('input[name="item_code[]"]').value
+                );
+
+                if (!row) {
+                    row = tableBody.rows[0].cloneNode(true);
+                    row.querySelectorAll('input').forEach(input => {
+                        if (input.classList.contains('amount')) input.value = 0;
+                        else if (input.classList.contains('qty') || input.classList.contains('sale_rate')) input.value = 0;
+                        else input.value = '';
+                    });
+                    tableBody.appendChild(row);
+                    attachEvents(row);
+                }
+
+                // Fill data
+                row.querySelector('input[name="barcode[]"]').value = barcode;
+                row.querySelector('input[name="item_code[]"]').value = data.item_code;
+                row.querySelector('input[name="product_name[]"]').value = data.product_name;
+                row.querySelector('input[name="company_name[]"]').value = data.company_name;
+                row.querySelector('input[name="specification[]"]').value = data.specification;
+                row.querySelector('input[name="qty[]"]').value = 1;
+                row.querySelector('input[name="sale_rate[]"]').value = Number(data.sale_rate) || 0;
+
+                row.querySelector('.qty').dispatchEvent(new Event('input'));
+                row.querySelector('.sale_rate').dispatchEvent(new Event('input'));
+            }
+
+            barcodeInput.value = '';
+        })
+        .catch(err => console.error(err));
+});
+
+// Cash received input
+document.getElementById('cash-received').addEventListener('input', updateTotals);
+});
+</script>
+
+
+
+{% endblock %}

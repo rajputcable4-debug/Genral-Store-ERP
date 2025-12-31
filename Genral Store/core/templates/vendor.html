@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+
+{% block title %}Vendor Details - ERP{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 id="vendor-heading">Vendor Details</h2>
+
+        <div class="d-flex gap-2 align-items-center">
+            <!-- Search -->
+            <input id="vendorSearch" class="form-control form-control-sm" 
+                   type="search" placeholder="Search by code, name, company">
+
+            <!-- Count -->
+            <div class="text-muted small" id="vendorCount">
+                {{ vendors|length }} record{{ vendors|length|pluralize }}
+            </div>
+
+            <!-- Add Vendor Button -->
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addVendorModal">
+                Add Vendor
+            </button>
+        </div>
+    </div>
+
+    <!-- Vendor Table -->
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Vendor Code</th>
+                    <th>Vendor Name</th>
+                    <th>Contact Number</th>
+                    <th>Company Name</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+
+            <tbody id="vendorTableBody">
+                {% for v in vendors %}
+                <tr class="vendor-row">
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ v.vender_code }}</td>
+                    <td>{{ v.vender_name }}</td>
+                    <td>{{ v.vender_number|default:"-" }}</td>
+                    <td>{{ v.company_name }}</td>
+                    <td>
+                        <!-- open edit modal and pass vendor data -->
+                        <button type="button"
+                                class="btn btn-sm btn-warning me-1 edit-vendor-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editVendorModal"
+                                data-id="{{ v.id }}"
+                                data-vender_code="{{ v.vender_code }}"
+                                data-vender_name="{{ v.vender_name }}"
+                                data-vender_number="{{ v.vender_number|default:'' }}"
+                                data-company_name="{{ v.company_name }}"
+                                aria-label="Edit {{ v.vender_name }}">
+                            Edit
+                        </button>
+
+                        <form method="POST" action="{% url 'delete_vendor' v.id %}" class="d-inline delete-vendor-form">
+                            {% csrf_token %}
+                            <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr class="no-vendor-row">
+                    <td colspan="6" class="text-center">No vendors found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Vendor Modal -->
+<div class="modal fade" id="addVendorModal" tabindex="-1" aria-labelledby="addVendorLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" action="{% url 'vendor_details' %}" class="needs-validation" novalidate id="addVendorForm">
+            {% csrf_token %}
+            <div class="modal-content">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Vendor</h5>
+                    <button class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+
+                    <!-- Vendor Code -->
+                    <div class="mb-3">
+                        <label class="form-label">Vendor Code</label>
+                        <input type="text" name="vender_code" id="vender_code"
+                               value="{{ next_vendor_code }}" class="form-control" readonly>
+                    </div>
+
+                    <!-- Vendor Name -->
+                    <div class="mb-3">
+                        <label class="form-label">Vendor Name</label>
+                        <input type="text" name="vender_name" class="form-control"
+                               value="{{ request.POST.vender_name|default:'' }}" required>
+                        <div class="invalid-feedback">Vendor name is required.</div>
+                    </div>
+
+                    <!-- Vendor Number -->
+                    <div class="mb-3">
+                        <label class="form-label">Vendor Contact Number</label>
+                        <input type="text" name="vender_number" class="form-control"
+                               value="{{ request.POST.vender_number|default:'' }}">
+                    </div>
+
+                    <!-- Company Name -->
+                    <div class="mb-3">
+                        <label class="form-label">Company Name</label>
+                        <input type="text" name="company_name" class="form-control"
+                               value="{{ request.POST.company_name|default:'' }}" required>
+                        <div class="invalid-feedback">Company name is required.</div>
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary" type="submit">Add Vendor</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Vendor Modal -->
+<div class="modal fade" id="editVendorModal" tabindex="-1" aria-labelledby="editVendorLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" action="{% url 'edit_vendor' 0 %}" class="needs-validation" novalidate id="editVendorForm">
+            {% csrf_token %}
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editVendorLabel">Edit Vendor</h5>
+                    <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <!-- Vendor Code -->
+                    <div class="mb-3">
+                        <label class="form-label">Vendor Code</label>
+                        <input type="text" name="vender_code" id="edit_vender_code" class="form-control" readonly>
+                    </div>
+
+                    <!-- Vendor Name -->
+                    <div class="mb-3">
+                        <label class="form-label">Vendor Name</label>
+                        <input type="text" name="vender_name" id="edit_vender_name" class="form-control" required>
+                        <div class="invalid-feedback">Vendor name is required.</div>
+                    </div>
+
+                    <!-- Vendor Number -->
+                    <div class="mb-3">
+                        <label class="form-label">Vendor Contact Number</label>
+                        <input type="text" name="vender_number" id="edit_vender_number" class="form-control">
+                    </div>
+
+                    <!-- Company Name -->
+                    <div class="mb-3">
+                        <label class="form-label">Company Name</label>
+                        <input type="text" name="company_name" id="edit_company_name" class="form-control" required>
+                        <div class="invalid-feedback">Company name is required.</div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Cancel</button>
+                    <button class="btn btn-primary" type="submit">Save changes</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    // Search
+    let searchInput = document.getElementById('vendorSearch');
+    let rows = document.querySelectorAll('.vendor-row');
+    let countEl = document.getElementById('vendorCount');
+
+    function filter() {
+        let q = searchInput.value.toLowerCase();
+        let visible = 0;
+
+        rows.forEach(r => {
+            let show = r.textContent.toLowerCase().includes(q);
+            r.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+
+        countEl.textContent = visible + ' record' + (visible === 1 ? '' : 's');
+    }
+
+    searchInput.addEventListener('input', filter);
+
+    // Form validation
+    let form = document.getElementById('addVendorForm');
+    form.addEventListener('submit', function (e) {
+        if (!form.checkValidity()) {
+            e.preventDefault();
+            form.classList.add('was-validated');
+        }
+    });
+
+    // Delete confirmation
+    document.querySelectorAll('.delete-vendor-form').forEach(f => {
+        f.addEventListener('submit', function (ev) {
+            if (!confirm('Are you sure you want to delete this vendor?')) {
+                ev.preventDefault();
+            }
+        });
+    });
+
+    // Edit modal wiring
+    var editButtons = document.querySelectorAll('.edit-vendor-btn');
+    var editForm = document.getElementById('editVendorForm');
+    var editUrlTemplate = "{% url 'edit_vendor' 0 %}"; // will replace the '0' with the id
+    editButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = btn.getAttribute('data-id');
+            var code = btn.getAttribute('data-vender_code') || '';
+            var name = btn.getAttribute('data-vender_name') || '';
+            var number = btn.getAttribute('data-vender_number') || '';
+            var company = btn.getAttribute('data-company_name') || '';
+
+            // populate fields
+            document.getElementById('edit_vender_code').value = code;
+            document.getElementById('edit_vender_name').value = name;
+            document.getElementById('edit_vender_number').value = number;
+            document.getElementById('edit_company_name').value = company;
+
+            // set action to /.../<id>/ by replacing '/0/' (or trailing 0) with '/<id>/'
+            if (editForm) {
+                var action = editUrlTemplate.replace('/0/', '/' + id + '/');
+                editForm.action = action;
+                editForm.classList.remove('was-validated');
+            }
+        });
+    });
+
+    // Validation for Edit form
+    if (editForm) {
+        editForm.addEventListener('submit', function (e) {
+            if (!editForm.checkValidity()) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            editForm.classList.add('was-validated');
+        });
+    }
+
+    // Reopen add modal if POST had error
+    {% if request.method == 'POST' and form_errors %}
+        let modal = new bootstrap.Modal(document.getElementById('addVendorModal'));
+        modal.show();
+    {% endif %}
+
+    // (optional) If the server signals edit-form errors, reopen edit modal and populate with provided POST values.
+    {% if request.method == 'POST' and edit_form_errors %}
+        // populate with POST data if available (best-effort)
+        document.getElementById('edit_vender_code').value = "{{ request.POST.vender_code|default:'' }}";
+        document.getElementById('edit_vender_name').value = "{{ request.POST.vender_name|default:'' }}";
+        document.getElementById('edit_vender_number').value = "{{ request.POST.vender_number|default:'' }}";
+        document.getElementById('edit_company_name').value = "{{ request.POST.company_name|default:'' }}";
+        var modal = new bootstrap.Modal(document.getElementById('editVendorModal'));
+        modal.show();
+    {% endif %}
+});
+</script>
+
+{% endblock %}

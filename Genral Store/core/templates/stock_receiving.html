@@ -1,0 +1,354 @@
+{% extends 'base.html' %}
+
+{% block title %}Stock Receiving{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">Stock Receiving</h2>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="POST" action="{% url 'stock_receiving_list' %}" id="receivingForm">
+        {% csrf_token %}
+
+        <!-- Header Inputs -->
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <label class="form-label">Receive Number</label>
+                <input type="text" class="form-control" name="receive_number" value="{{receive_number}}" readonly>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Receiving Date</label>
+                <input type="date" class="form-control" id="receive_date" name="receive_date" value="{{ today_date|date:'Y-m-d' }}" readonly>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Receiving From (Vendor)</label>
+                <select class="form-select" name="vendor" id="vendorSelect" required>
+                    <option value="">--select vendor--</option>
+                    {% for i in vendors %}
+                    <option value="{{i.vender_code}}-{{i.vender_name}}">{{i.vender_code}}-{{i.vender_name}}</option>
+                    {% endfor %}
+
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Scan / Enter Barcode</label>
+                <input type="text" class="form-control" id="barcodeInput" placeholder="Scan barcode">
+            </div>
+        </div>
+
+        <!-- Product Search Dropdown -->
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <label class="form-label">Search Product</label>
+                <select class="form-select" id="productSelect">
+                    <option value="" selected>Select Product</option>
+                    {% for product in products %}
+                        <option 
+                            value="{{ product.id }}"
+                            data-code="{{ product.item_code }}"
+                            data-name="{{ product.product_name }}"
+                            data-company="{{ product.company_name }}"
+                            data-spec="{{ product.specification|default:'' }}"
+                            data-rate="{{ product.rate|default:0 }}"
+                            data-sale="{{ product.sale_rate|default:0 }}"
+                            data-barcode="{{ product.barcode|default:'' }}"
+                        >
+                            {{ product.item_code }} - {{ product.product_name }} - {{ product.company_name }} - {{ product.specification|default:'' }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- Product Table -->
+        <h5>Product Details</h5>
+        <table class="table table-bordered table-sm" id="productTable">
+            <thead class="table-light">
+                <tr>
+                    <th>Item Code</th>
+                    <th>Company</th>
+                    <th>Product Name</th>
+                    <th>Specification</th>
+                    
+                    <th>Qty</th>
+                    <th>Rate</th>
+                    <th>Sale Rate</th>
+                    <th>Barcode</th>
+                    <th>Amount</th>
+                    <th>Exp.Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <button type="button" class="btn btn-primary mb-3" id="okButton">OK</button>
+
+        <!-- EMIE Table -->
+       <h5>EMIE Details</h5>
+<table class="table table-bordered table-sm" id="emieTable">
+    <thead class="table-light">
+        <tr>
+            <th>Item Code</th>
+            <th>Company</th>
+            <th>Product Name</th>
+            <th>Specification</th>
+            <th>Qty</th>
+            <th>Rate</th>
+            <th>Sale Rate</th>
+            <th>Barcode</th>
+            <th>Amount</th>
+            <th>Exp.Date</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<!-- Hidden input to store JSON rows -->
+<input type="hidden" name="rows" id="rowsInput">
+
+<!-- Hidden items container -->
+<div id="itemsContainer"></div>
+
+<!-- Summary -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label class="form-label">Total Quantity</label>
+        <input type="text" class="form-control" id="totalQty" readonly value="0">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Total Cash</label>
+        <input type="text" class="form-control" id="totalCash" readonly value="0">
+    </div>
+</div>
+
+<button type="submit" class="btn btn-success">Submit</button>
+    </form>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const productTableBody = document.querySelector("#productTable tbody");
+    const barcodeInput = document.getElementById("barcodeInput");
+    const productSelect = document.getElementById("productSelect");
+    const totalQtyInput = document.getElementById("totalQty");
+    const totalCashInput = document.getElementById("totalCash");
+    const emieTableBody = document.querySelector("#emieTable tbody");
+    const receivingForm = document.getElementById("receivingForm");
+    const rowsInput = document.getElementById("rowsInput");
+
+    /* -----------------------------
+       UTILITIES
+    ------------------------------*/
+    function calculateRowAmount(row) {
+        const qty = parseInt(row.querySelector(".qty").value) || 0;
+        const rate = parseFloat(row.querySelector(".rate").value) || 0;
+        row.querySelector(".amount").innerText = (qty * rate).toFixed(2);
+        updateSummary();
+    }
+
+    function updateSummary() {
+        let totalQty = 0;
+        let totalCash = 0;
+        productTableBody.querySelectorAll("tr").forEach(row => {
+            const qty = parseInt(row.querySelector(".qty").value) || 0;
+            const rate = parseFloat(row.querySelector(".rate").value) || 0;
+            totalQty += qty;
+            totalCash += qty * rate;
+        });
+        totalQtyInput.value = totalQty;
+        totalCashInput.value = totalCash.toFixed(2);
+    }
+
+    function removeRow(btn) {
+        btn.closest("tr").remove();
+        updateSummary();
+    }
+
+    function attachRowEvents(row) {
+        row.querySelector(".qty").addEventListener("input", () => calculateRowAmount(row));
+        row.querySelector(".rate").addEventListener("input", () => calculateRowAmount(row));
+        row.querySelector(".remove").addEventListener("click", () => removeRow(row.querySelector(".remove")));
+        // Allow barcode editing in table and update row key
+        row.querySelector(".barcode").addEventListener("change", function () {
+            // Update row key to reflect new barcode
+            const productId = row.dataset.key.split("_")[0];
+            row.dataset.key = productId + "_" + this.value.trim();
+            calculateRowAmount(row);
+        });
+    }
+
+    function addProductRow(data) {
+        const row = document.createElement("tr");
+        row.dataset.key = data.productId + "_" + data.barcode;
+
+        row.innerHTML = `
+            <td>${data.code}</td>
+            <td>${data.company}</td>
+            <td>${data.name}</td>
+            <td>${data.spec}</td>
+            <td><input type="number" class="form-control form-control-sm qty" value="${data.qty || 1}" min="1"></td>
+            <td><input type="number" class="form-control form-control-sm rate" value="${data.rate || 0}" step="0.01"></td>
+            <td><input type="number" class="form-control form-control-sm sale" value="${data.sale || 0}" step="0.01"></td>
+            <td><input type="text" class="form-control form-control-sm barcode" value="${data.barcode}"></td>
+            <td class="amount">0.00</td>
+            <td><input type="date" class="form-control form-control-sm exp-date" value="${data.expDate || ''}"></td>
+            <td><button type="button" class="btn btn-sm btn-danger remove">X</button></td>
+        `;
+        productTableBody.appendChild(row);
+        calculateRowAmount(row);
+        attachRowEvents(row);
+    }
+
+    /* -----------------------------
+       ADD PRODUCT FROM DROPDOWN
+    ------------------------------*/
+    productSelect.addEventListener("change", function () {
+        const opt = this.options[this.selectedIndex];
+        if (!opt.value) return;
+
+        const barcode = opt.dataset.barcode || "";
+        const productId = opt.value;
+        const key = productId + "_" + barcode;
+
+        // Increment if exists
+        const existingRow = [...productTableBody.rows].find(r => r.dataset.key === key);
+        if (existingRow) {
+            const qtyInput = existingRow.querySelector(".qty");
+            qtyInput.value = parseInt(qtyInput.value) + 1;
+            calculateRowAmount(existingRow);
+            this.selectedIndex = 0;
+            return;
+        }
+
+        addProductRow({
+            productId: productId,
+            code: opt.dataset.code,
+            company: opt.dataset.company,
+            name: opt.dataset.name,
+            spec: opt.dataset.spec,
+            rate: opt.dataset.rate,
+            sale: opt.dataset.sale,
+            barcode: barcode
+        });
+
+        this.selectedIndex = 0;
+    });
+
+/* -----------------------------
+   BARCODE SCAN / INPUT (REAL-TIME)
+------------------------------*/
+let barcodeTimer;
+const BARCODE_DEBOUNCE = 300; // 300ms delay for manual typing
+
+barcodeInput.addEventListener("input", function () {
+    const inputValue = this.value.trim();
+    if (!inputValue) return;
+
+    clearTimeout(barcodeTimer);
+    barcodeTimer = setTimeout(() => {
+        const processed = handleBarcode(inputValue);
+        if (processed) {
+            barcodeInput.value = ""; // Clear only if barcode was valid
+        }
+    }, BARCODE_DEBOUNCE);
+});
+
+function handleBarcode(barcode) {
+    const cleanBarcode = barcode.replace(/\s+/g, "");
+    if (!cleanBarcode) return false;
+
+    // Check if barcode already exists → increment qty
+    let existingRow = [...productTableBody.rows].find(row =>
+        row.querySelector(".barcode").value.replace(/\s+/g, "") === cleanBarcode
+    );
+
+    if (existingRow) {
+        const qtyInput = existingRow.querySelector(".qty");
+        qtyInput.value = parseInt(qtyInput.value) + 1;
+        calculateRowAmount(existingRow);
+        return true;
+    }
+
+    // Find product from dropdown options by barcode
+    const matchedOption = [...productSelect.options].find(
+        opt => (opt.dataset.barcode || "").replace(/\s+/g, "") === cleanBarcode
+    );
+
+    if (!matchedOption) return false;
+
+    // Add new row for the product
+    addProductRow({
+        productId: matchedOption.value,
+        code: matchedOption.dataset.code,
+        company: matchedOption.dataset.company,
+        name: matchedOption.dataset.name,
+        spec: matchedOption.dataset.spec,
+        rate: matchedOption.dataset.rate,
+        sale: matchedOption.dataset.sale,
+        barcode: cleanBarcode
+    });
+
+    return true;
+}
+
+
+    /* -----------------------------
+       OK BUTTON → EMIE TABLE
+    ------------------------------*/
+    document.getElementById("okButton").addEventListener("click", function () {
+        emieTableBody.innerHTML = "";
+        productTableBody.querySelectorAll("tr").forEach(row => {
+            const clone = document.createElement("tr");
+            clone.innerHTML = `
+                <td>${row.cells[0].innerText.trim()}</td>
+                <td>${row.cells[1].innerText.trim()}</td>
+                <td>${row.cells[2].innerText.trim()}</td>
+                <td>${row.cells[3].innerText.trim()}</td>
+                <td>${row.querySelector(".qty").value}</td>
+                <td>${row.querySelector(".rate").value}</td>
+                <td>${row.querySelector(".sale").value}</td>
+                <td>${row.querySelector(".barcode").value}</td>
+                <td>${row.querySelector(".amount").innerText}</td>
+                <td>${row.querySelector(".exp-date").value || ""}</td>
+            `;
+            emieTableBody.appendChild(clone);
+        });
+    });
+
+    /* -----------------------------
+       BEFORE FORM SUBMIT
+    ------------------------------*/
+    receivingForm.addEventListener("submit", function () {
+        const rows = [];
+        productTableBody.querySelectorAll("tr").forEach(row => {
+            const barcodeVal = row.querySelector(".barcode").value.trim();
+            if (!barcodeVal) return; // skip empty
+            rows.push({
+                item_code: row.cells[0].innerText.trim(),
+                company: row.cells[1].innerText.trim(),
+                product_name: row.cells[2].innerText.trim(),
+                specification: row.cells[3].innerText.trim(),
+                qty: row.querySelector(".qty").value,
+                rate: row.querySelector(".rate").value,
+                sale_rate: row.querySelector(".sale").value,
+                barcode_number: barcodeVal,
+                amount: row.querySelector(".amount").innerText,
+                exp_date: row.querySelector(".exp-date").value || null
+            });
+        });
+        rowsInput.value = JSON.stringify(rows);
+    });
+
+});
+</script>
+
+
+{% endblock %}

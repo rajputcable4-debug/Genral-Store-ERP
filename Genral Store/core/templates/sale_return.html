@@ -1,0 +1,252 @@
+{% extends 'base.html' %}
+{% block title %}Sales Return{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm p-4">
+
+    <h5 class="mb-4 text-danger">
+        <i class="bi bi-arrow-counterclockwise"></i> Sale Return
+    </h5>
+
+    <form method="post" id="return-form">
+        {% csrf_token %}
+
+        <!-- ================= SALE SEARCH ================= -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="sale-number">Sale Number</label>
+                <div class="input-group">
+                    <input type="text" name="sale_number" id="sale-number" class="form-control" placeholder="Enter sale number">
+                    <button type="button" class="btn btn-outline-primary" id="search-sale">Search</button>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="sale-date">Sale Date</label>
+                <input type="date" name="sale_date" id="sale-date" class="form-control" readonly>
+            </div>
+        </div>
+
+        <!-- ================= CUSTOMER INFO ================= -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="customer-name">Customer Name</label>
+                <input type="text" name="customer_name" id="customer-name" class="form-control" readonly>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="contact-number">Contact Number</label>
+                <input type="text" name="contact_number" id="contact-number" class="form-control" readonly>
+            </div>
+        </div>
+
+        <!-- ================= RETURN INFO ================= -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="return-number">Return Number</label>
+               <input type="text" id="return-number" class="form-control" value="{{ return_number }}" readonly>
+
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="return-date">Return Date</label>
+                <input type="date" name="return_date" id="return-date" class="form-control" value="{{ today }}">
+            </div>
+        </div>
+
+        <!-- ================= RETURN TABLE ================= -->
+        <h6 class="mb-2 fw-semibold">Return Items</h6>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm align-middle text-center" id="return-table">
+                <thead class="table-light">
+                    <tr>
+                        <th>Barcode</th>
+                        <th>Description</th>
+                        <th>Specification</th>
+                        <th width="140">Qty</th>
+                        <th>Barcode Verification</th>
+                        <th width="120">Sale Rate</th>
+                        <th width="120">Amount</th>
+                        <th width="80">Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- ================= TOTALS ================= -->
+        <div class="row g-3 mt-4">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold" for="total-qty">Total Qty</label>
+                <input type="text" id="total-qty" class="form-control" name="total_quantity" readonly value="0">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold" for="total-amount">Total Amount</label>
+                <input type="text" id="total-amount" class="form-control" name="total_amount" readonly value="0.00">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold" for="amount-refunded">Amount Refunded</label>
+                <input type="number" name="amount_refunded" id="amount-refunded" class="form-control" min="0">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold" for="return-reason">Return Reason</label>
+                <input type="text" name="return_reason" id="return-reason" class="form-control">
+            </div>
+        </div>
+
+        <!-- ================= ACTIONS ================= -->
+        <div class="text-end mt-4">
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-arrow-counterclockwise"></i> Submit Return
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- ================= JAVASCRIPT ================= -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const tbody = document.querySelector('#return-table tbody');
+    const totalQtyInput = document.getElementById('total-qty');
+    const totalAmountInput = document.getElementById('total-amount'); // STATIC
+    const refundedInput = document.getElementById('amount-refunded');
+
+    let originalSaleTotal = 0; // Store original sale total
+
+    document.getElementById('search-sale').addEventListener('click', fetchSale);
+
+    function fetchSale() {
+        const saleNumber = document.getElementById('sale-number').value.trim();
+        if (!saleNumber) return alert('Please enter sale number');
+
+        fetch(`/get-sale-details/?sale_number=${saleNumber}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) return alert(data.error);
+                populateSale(data);
+            })
+            .catch(() => alert('Server error'));
+    }
+
+    function populateSale(data) {
+        document.getElementById('sale-date').value = data.sale_date;
+        document.getElementById('customer-name').value = data.customer_name;
+        document.getElementById('contact-number').value = data.customer_contact;
+
+        tbody.innerHTML = '';
+        originalSaleTotal = 0;
+
+        data.items.forEach(item => {
+            addRow(item);
+            originalSaleTotal += Number(item.qty) * Number(item.sale_rate);
+        });
+
+        // Set total-amount as STATIC
+        totalAmountInput.value = originalSaleTotal.toFixed(2);
+
+        // Set all Qty to 0 initially
+        tbody.querySelectorAll('.qty').forEach(input => input.value = 0);
+
+        // Update refund based on qtys
+        updateRefundAmount();
+    }
+
+    function addRow(item) {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><input class="form-control form-control-sm" name="barcode[]" value="${item.barcode}" readonly></td>
+            <td><input class="form-control form-control-sm" name="description[]" value="${item.description}" readonly></td>
+            <td><input class="form-control form-control-sm" name="specification[]" value="${item.specification || ''}" readonly></td>
+
+            <td>
+                <div class="input-group input-group-sm">
+                    <button type="button" class="btn btn-outline-secondary qty-minus">−</button>
+                    <input type="number" class="form-control qty text-center" name="qty[]" value="0" min="0" max="${item.qty}">
+                    <button type="button" class="btn btn-outline-secondary qty-plus">+</button>
+                </div>
+            </td>
+
+            <td>
+                <div class="input-group input-group-sm">
+                    <input type="text" class="form-control barcode-input" placeholder="Scan/Enter barcode">
+                    <button type="button" class="btn btn-outline-success verify-barcode">Verify</button>
+                </div>
+            </td>
+
+            <td><input class="form-control form-control-sm rate" name="sale_rate[]" value="${item.sale_rate}" readonly></td>
+            <td><input class="form-control form-control-sm amount" name="amount[]" readonly></td>
+
+            <td>
+                <button type="button" class="btn btn-sm btn-danger remove-row">X</button>
+            </td>
+        `;
+        tbody.appendChild(row);
+
+        const maxQty = Number(item.qty);
+
+        // Qty buttons
+        row.querySelector('.qty-plus').onclick = () => changeQty(row, 1, maxQty);
+        row.querySelector('.qty-minus').onclick = () => changeQty(row, -1, maxQty);
+        row.querySelector('.qty').oninput = () => updateRefundAmount();
+
+        // Remove row button
+        row.querySelector('.remove-row').onclick = () => {
+            row.remove();
+            updateRefundAmount();
+        };
+
+        // Barcode verify button
+        row.querySelector('.verify-barcode').onclick = () => {
+            const input = row.querySelector('.barcode-input');
+            const barcodeValue = input.value.trim();
+            const rowBarcode = row.querySelector('input[name="barcode[]"]').value.trim();
+            const qtyInput = row.querySelector('.qty');
+
+            if (barcodeValue === rowBarcode) {
+                // Increment only if current qty < original sold qty
+                let currentQty = Number(qtyInput.value || 0);
+                if (currentQty < maxQty) {
+                    qtyInput.value = currentQty + 1;
+                    updateRefundAmount();
+                } else {
+                    alert('Cannot exceed sold quantity!');
+                }
+                input.value = ''; // clear barcode input after verify
+            } else {
+                alert('Barcode does not match!');
+            }
+        };
+    }
+
+    function changeQty(row, delta, maxQty) {
+        const qtyInput = row.querySelector('.qty');
+        let qty = Number(qtyInput.value || 0);
+        qty = Math.max(0, Math.min(maxQty, qty + delta));
+        qtyInput.value = qty;
+        updateRefundAmount();
+    }
+
+    function updateRefundAmount() {
+        let totalQty = 0;
+        let refundAmount = 0;
+
+        tbody.querySelectorAll('tr').forEach(row => {
+            const qty = Number(row.querySelector('.qty').value || 0);
+            const rate = Number(row.querySelector('.rate').value || 0);
+
+            const amount = qty * rate;
+            row.querySelector('.amount').value = amount.toFixed(2);
+
+            totalQty += qty;
+            refundAmount += amount;
+        });
+
+        totalQtyInput.value = totalQty;
+        refundedInput.value = refundAmount.toFixed(2);
+
+        // totalAmountInput remains STATIC (originalSaleTotal)
+        totalAmountInput.value = originalSaleTotal.toFixed(2);
+    }
+});
+</script>
+
+
+{% endblock %}
